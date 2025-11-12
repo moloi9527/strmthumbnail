@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: production
+    container_name: emby-thumbnail-manager
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # 持久化数据
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # 挂载媒体目录（按需配置）
+      - /path/to/your/media:/media:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      # 从 .env 文件加载其他环境变量
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - emby-network
+
+  # 可选：Redis 用于会话存储
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: emby-thumbnail-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - emby-network
+
+networks:
+  emby-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

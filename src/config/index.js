@@ -10,8 +10,8 @@ class Config {
   constructor() {
     this.config = {
       // 服务器配置
-      port: process.env.PORT || 3000,
-      host: process.env.HOST || 'localhost',
+      port: parseInt(process.env.PORT || '3000'),
+      host: process.env.HOST || '0.0.0.0',
 
       // 认证配置
       defaultUsername: process.env.DEFAULT_USERNAME || 'admin',
@@ -30,16 +30,33 @@ class Config {
 
       // 缓存配置
       cacheAutoSaveInterval: parseInt(process.env.CACHE_SAVE_INTERVAL || '300000'), // 5分钟
+      cacheMaxAge: parseInt(process.env.CACHE_MAX_AGE || '2592000000'), // 30天
 
-      // 超时配置
+      // 超时配置（毫秒）
       ffprobeTimeout: parseInt(process.env.FFPROBE_TIMEOUT || '10000'),
-      ffmpegTimeout: parseInt(process.env.FFMPEG_TIMEOUT || '25000'),
+      ffmpegTimeout: parseInt(process.env.FFMPEG_TIMEOUT || '30000'),
       curlTimeout: parseInt(process.env.CURL_TIMEOUT || '20000'),
       httpTimeout: parseInt(process.env.HTTP_TIMEOUT || '8000'),
+
+      // 缩略图配置
+      thumbnailQuality: parseInt(process.env.THUMBNAIL_QUALITY || '85'),
+      thumbnailFormat: process.env.THUMBNAIL_FORMAT || 'jpg',
+      maxThumbnailWidth: parseInt(process.env.MAX_THUMBNAIL_WIDTH || '1920'),
+      maxThumbnailHeight: parseInt(process.env.MAX_THUMBNAIL_HEIGHT || '1080'),
+      defaultThumbnailPosition: process.env.DEFAULT_THUMBNAIL_POSITION || 'middle', // start, middle, end, auto
 
       // 日志配置
       logLevel: process.env.LOG_LEVEL || 'info',
       logFile: process.env.LOG_FILE || path.join(process.cwd(), 'logs', 'app.log'),
+      logMaxSize: process.env.LOG_MAX_SIZE || '10m',
+      logMaxFiles: process.env.LOG_MAX_FILES || '7d',
+
+      // 安全配置
+      enableCors: process.env.ENABLE_CORS !== 'false',
+      enableHelmet: process.env.ENABLE_HELMET !== 'false',
+      enableRateLimit: process.env.ENABLE_RATE_LIMIT !== 'false',
+      rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '900000'), // 15分钟
+      rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || '100'),
 
       // 环境
       env: process.env.NODE_ENV || 'production'

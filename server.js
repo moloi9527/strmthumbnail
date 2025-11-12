@@ -1,11 +1,17 @@
 /**
  * 封面自动生成器 - 主服务器文件
- * 模块化重构版本
+ * 增强版 v2.0
  */
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
+
+// 加载环境变量
+require('dotenv').config();
 
 // 导入配置和工具
 const config = require('./src/config');
@@ -28,6 +34,7 @@ const createVideoRoutes = require('./src/routes/video');
 // 初始化应用
 const app = express();
 const PORT = config.get('port');
+const HOST = config.get('host');
 
 // 初始化日志
 const logger = new Logger({
@@ -42,9 +49,39 @@ const authService = new AuthService(config, logger);
 const cacheService = new CacheService(config, logger);
 const videoService = new VideoService(config, logger, cacheService);
 
-// 中间件
-app.use(cors());
-app.use(express.json());
+// 安全中间件
+if (config.get('enableHelmet')) {
+  app.use(helmet({
+    contentSecurityPolicy: false, // 允许内联脚本（因为前端使用 CDN）
+    crossOriginEmbedderPolicy: false
+  }));
+}
+
+// 启用 CORS
+if (config.get('enableCors')) {
+  app.use(cors());
+}
+
+// 启用 gzip 压缩
+app.use(compression());
+
+// 速率限制
+if (config.get('enableRateLimit')) {
+  const limiter = rateLimit({
+    windowMs: config.get('rateLimitWindow'),
+    max: config.get('rateLimitMax'),
+    message: '请求过于频繁，请稍后再试',
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+  app.use('/api/', limiter);
+}
+
+// Body 解析
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 请求日志
 app.use(createRequestLogger(logger));
 
 // 托管前端文件
@@ -52,6 +89,38 @@ app.use(express.static('public'));
 
 // 创建认证中间件
 const authMiddleware = createAuthMiddleware(authService, logger);
+
+// 健康检查端点（无需认证）
+app.get('/api/health', (req, res) => {
+  const healthCheck = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    services: {
+      cache: {
+        status: 'ok',
+        size: cacheService.size()
+      },
+      sessions: authService.getSessionStats()
+    },
+    memory: process.memoryUsage(),
+    version: require('./package.json').version
+  };
+
+  res.status(200).json(healthCheck);
+});
+
+// 指标端点（需要认证）
+app.get('/api/metrics', authMiddleware, (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    cache: cacheService.getStats(),
+    sessions: authService.getSessionStats(),
+    memory: process.memoryUsage(),
+    cpu: process.cpuUsage()
+  });
+});
 
 // 注册路由
 app.use('/api/auth', createAuthRoutes(authService, authMiddleware));
@@ -83,7 +152,7 @@ async function initializeServices() {
 
     // 启动缓存清理定时器（每天清理一次）
     setInterval(() => {
-      cacheService.cleanOldEntries();
+      cacheService.cleanOldEntries(config.get('cacheMaxAge'));
     }, 24 * 60 * 60 * 1000);
 
     logger.info('所有服务初始化完成');
@@ -143,15 +212,18 @@ async function startServer() {
     await initializeServices();
 
     // 启动 HTTP 服务器
-    app.listen(PORT, () => {
+    app.listen(PORT, HOST, () => {
       logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      logger.info(`🚀 封面生成器服务已启动`);
-      logger.info(`📡 监听端口: ${PORT}`);
-      logger.info(`🌐 API 地址: http://localhost:${PORT}/api`);
-      logger.info(`📁 前端地址: http://localhost:${PORT}`);
+      logger.info(`🚀 Emby 封面生成器 v${require('./package.json').version}`);
+      logger.info(`📡 监听地址: ${HOST}:${PORT}`);
+      logger.info(`🌐 API 地址: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/api`);
+      logger.info(`📁 前端地址: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+      logger.info(`💚 健康检查: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/api/health`);
       logger.info(`🔐 认证已启用`);
+      logger.info(`🛡️  安全功能: Helmet=${config.get('enableHelmet')}, RateLimit=${config.get('enableRateLimit')}`);
       logger.info(`📊 日志级别: ${config.get('logLevel')}`);
       logger.info(`🗄️  缓存大小: ${cacheService.size()} 条记录`);
+      logger.info(`🌍 运行环境: ${config.get('env')}`);
       logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     });
   } catch (err) {

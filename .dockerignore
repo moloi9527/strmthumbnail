@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+README.md
+.DS_Store
+logs
+*.log
+tmp
+data
+auth.json
+.video_cache.json
+coverage
+.vscode
+.idea
+*.md
